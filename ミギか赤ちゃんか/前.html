@@ -1,0 +1,1919 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ミギか赤ちゃんか</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- YouTube IFrame API -->
+    <script type="text/javascript" id="www-widgetapi-script" src="https://www.youtube.com/s/player/ab89db3f/www-widgetapi.vflset/www-widgetapi.js" async=""></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Zen Maru Gothic', sans-serif;
+            background-color: #fdfbf7;
+            color: #1e293b;
+            /* body自体の背景色を確保しつつ、ちらつき防止 */
+            margin: 0;
+        }
+        
+        /* Custom Animations */
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideInLeft { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes bounceIn { 0% { transform: translate(-50%, 0) scale(0.1); opacity: 0;} 60% { transform: translate(-50%, 0) scale(1.2); opacity: 1;} 100% { transform: translate(-50%, 0) scale(1); } }
+        @keyframes float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-20px) rotate(10deg); } }
+        @keyframes sway { 0%, 100% { transform: rotate(-5deg) translateY(0); } 50% { transform: rotate(5deg) translateY(-5px); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+        .animate-shake { animation: shake 0.3s ease-in-out; }
+        .animate-slideInRight { animation: slideInRight 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+        .animate-slideInLeft { animation: slideInLeft 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+        .animate-bounce-in { animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards; }
+        .animate-float { animation: float 15s ease-in-out infinite; }
+        .animate-sway { animation: sway 3s ease-in-out infinite; }
+        .animate-fadeIn { animation: fadeIn 0.5s ease-out forwards; }
+        .animate-slideUp { animation: slideUp 0.5s ease-out forwards; }
+        .animate-popIn { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+        #youtube-player-hidden { position: absolute; top: -9999px; left: -9999px; opacity: 0; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <!-- 
+      重要: style="opacity: 0" をインラインで設定することで、
+      CSS読み込み前やReact起動前の描画を完全に防ぎます。
+    -->
+    <div id="root" style="opacity: 0; transition: opacity 0.5s ease-out;"></div>
+
+    <script type="text/babel" data-type="module">
+        const { useState, useEffect, useRef } = React;
+
+        // --- 初期設定データ ---
+        const DEFAULT_SOUNDS = {
+            btn: "",
+            correct: "",
+            incorrect: "",
+            unlock: "unlock.mp3" // デフォルト解除音
+        };
+
+        const INITIAL_DATA = {
+            "questions": [
+                {
+                    "id": 1,
+                    "situation": "作戦会議中",
+                    "text": "「ダリ、ぼくに任せろ。完璧な角度、一条家の母をあざむく態度…ぼくの演技があれば、一条家母の攻略など容易いことだ」",
+                    "type": "MIGI",
+                    "explanation": "自信満々、これは計算高いミギです。完全に理性的なミギです。",
+                    "daliComment": "その慢心が命取りになるぞ、ミギ。\n相手はただの母親ではない……\n腹の中まで見透かされるぞ。心してかかれ。",
+                    "daliIcon": "normal.png",
+                    "imageUrl": ""
+                },
+                {
+                    "id": 2,
+                    "situation": "おやつの時間",
+                    "text": "（一条母に抱っこされ、頭を撫でられ、うっとりした目で指をくわえ、完全に脱力している）\n「バブゥ……」",
+                    "type": "BABY",
+                    "explanation": "警戒心が完全に消失しています。\n演技で脱力しているのではなく、母性による快楽物質で思考が停止し、ただの幼児として「飼い慣らされて」しまっています。",
+                    "daliComment": "その締まりのない顔はなんだ、ミギ。しっかりしろ。\n......完全に骨抜きにされているな。",
+                    "daliIcon": "normal.png",
+                    "imageUrl": ""
+                },
+                {
+                    "id": 3,
+                    "situation": "一条母に怪しまれそうになった",
+                    "text": "（怪しまれ、咄嗟に床に転がるミギ。大声で泣き叫びながら、チラッと相手の反応を横目で確認する）\n「オギャーーッ！ ママ、ママぁ！！」",
+                    "type": "MIGI",
+                    "explanation": "相手の思考を停止させるための音響攻撃、および視線を誘導する高度な演技です。",
+                    "daliComment": "やるじゃないか、ミギ。その耳をつんざくような不快な泣き声……相手の思考能力を奪うための撹乱工作だ。",
+                    "daliIcon": "margin.png",
+                    "imageUrl": ""
+                },
+                {
+                    "id": 4,
+                    "situation": "脳内作戦会議",
+                    "text": "「壁のシミさん……こんにちは……アハハ、キャハハ！」\n（何もない壁の一点を凝視し、楽しそうに会話を続けている）",
+                    "type": "BABY",
+                    "explanation": "孤独に耐えきれず、幻覚（イマジナリーフレンド）を作り出しています。\n思考能力が崩壊し、現実逃避を始めました。",
+                    "daliComment": "……おい、誰と話している？ そこには誰もいないぞ。\nまずいな……孤独に蝕まれ、脳内に都合のいい『友達』を作ってしまったようだ。",
+                    "daliIcon": "suspicion.png",
+                    "imageUrl": ""
+                },
+                {
+                    "id": 5,
+                    "situation": "3時のおやつ（チェリーパイ）",
+                    "text": "「まんまぁ〜！ パイ！ パイおいちい！もっと！」",
+                    "type": "MIGI",
+                    "explanation": "一見赤ちゃんですが、これは「パイをもっと食べたい」というミギの強欲な本性です。\n理性を捨てて食欲に走ってしまっています。",
+                    "daliComment": "あさましいぞミギ。口元を拭け",
+                    "daliIcon": "suspicion.png",
+                    "imageUrl": ""
+                },
+                {
+                    "id": 6,
+                    "situation": "子供部屋でのひとり遊び",
+                    "text": "（積み木を見つめて）\n「この重心のバランス…さすがぼく。完璧だ」",
+                    "type": "MIGI",
+                    "explanation": "遊びの中に物理法則と自画自賛を見出しています。知性を持て余したミギです。",
+                    "daliComment": "芸術点が高いな。だが見つかる前に早く片付けろ。",
+                    "daliIcon": "normal.png",
+                    "imageUrl": ""
+                },
+                {
+                    "id": 7,
+                    "situation": "雷が鳴り響く夜",
+                    "text": "（大粒の涙を瞳いっぱいに溜めて）\n「…怖いよぉ、ママ…」",
+                    "type": "MIGI",
+                    "explanation": "完璧なタイミングでの涙。庇護欲を刺激するための高度な演技プランです。",
+                    "daliComment": "涙腺すらも自在に操るとはな。\nその『嘘泣きの演技』見事だ。\n……よし、そのまま懐へ潜り込め。",
+                    "daliIcon": "margin.png",
+                    "imageUrl": ""
+                },
+                {
+                    "id": 8,
+                    "situation": "身支度",
+                    "text": "（ボンネット帽子とおしゃぶり、おむつを履き、がらがらを持って）\n「これは作戦に必要な変装だ、ダリ」",
+                    "type": "MIGI",
+                    "explanation": "ビジュアルは赤ちゃんですが、その目的を「作戦」と認識しているので中身はミギです。",
+                    "daliComment": "（笑いこらえるダリの姿）",
+                    "daliIcon": "normal.png",
+                    "imageUrl": ""
+                },
+                {
+                    "id": 9,
+                    "situation": "一条母特製の離乳食（晩ごはん後のデザート）",
+                    "text": "「まんま……あーん……」\n（スプーンを目で追うことしかできていない。口の端からよだれを垂らし、次の一口が待ちきれず、小鳥のようにパクパクと口を動かしている）",
+                    "type": "BABY",
+                    "explanation": "演技に必要な「観察」の目を失っています。\nプライドも羞恥心もなくなり、ただの「食欲の塊」として餌を求めている状態です。\n完全に「世話をされる存在」として飼い慣らされてしまいました。",
+                    "daliComment": "おい、しっかりしろミギ！\nその甘ったるい代物と一緒に、脳みそまで溶かされるつもりか！",
+                    "daliIcon": "suspicion.png",
+                    "imageUrl": ""
+                },
+                {
+                    "id": 10,
+                    "situation": "お風呂上がりのスキンシップ",
+                    "text": "「キャハハハ！ バブゥ！ キャッキャ！」\n（こちょこちょされて全身をよじる笑い）",
+                    "type": "BABY",
+                    "explanation": "生理的な反射で笑い転げています。\nここに理性も演技もありません。ただの幸せな幼児です。",
+                    "daliComment": "全く、無防備すぎる。\n弱点を探られでもしたらどうする。",
+                    "daliIcon": "normal.png",
+                    "imageUrl": ""
+                },
+                {
+                    "id": 11,
+                    "situation": "朝食（一対一の対面状況）",
+                    "text": "「あーん……」\n（口を開けて待っているが、スプーンが口に入る瞬間に、一条母の腕時計の反射を一瞬だけ凝視した）",
+                    "type": "MIGI",
+                    "explanation": "食欲に負けたふりをして、鏡面反射を利用し、背後のドアの施錠状態や部屋の死角を確認しています。",
+                    "daliComment": "餌を待つ雛鳥のフリをして、視線は背後を探っている。\n一条母の動き、背後の死角…食事中こそが最大のチャンスというわけか。",
+                    "daliIcon": "normal.png",
+                    "imageUrl": ""
+                },
+                {
+                    "id": 12,
+                    "situation": "迎撃態勢の準備",
+                    "text": "「スヤァ……ムニャムニャ……」\n（大の字になって爆睡しているが、枕の下に手を差し込んでいる）",
+                    "type": "MIGI",
+                    "explanation": "寝ていると見せかけて、万が一敵が入ってきた時に即座に反応できるよう、防御姿勢をカモフラージュしています。",
+                    "daliComment": "狸寝入りか、悪くない。\n一見隙だらけだが、敵の警戒心を解くためのカモフラージュ…いつでも懐に飛び掛かれる。",
+                    "daliIcon": "normal.png",
+                    "imageUrl": ""
+                },
+                {
+                    "id": 13,
+                    "situation": "深夜の消灯後（完全な暗闇）",
+                    "text": "（布団を頭までかぶり、ガタガタと震えながら）\n「……おばけ……こわい……ママ……たすけて……」",
+                    "type": "BABY",
+                    "explanation": "暗闇への根源的な恐怖に支配されています。\n論理的な思考ができなくなり、誰でもいいから助けを求めている状態です。",
+                    "daliComment": "……ミギ、ぼくの目を見ろ！ お化けなどいない！\nこの屋敷にいるのは……ぼくらが復讐すべき標的だけだ！",
+                    "daliIcon": "suspicion.png",
+                    "imageUrl": ""
+                }
+            ],
+            "config": {
+                "_s_key": "-1421062635",
+                "lockAdmin": false,
+                "isGameActive": true,
+                "gameClosedMsg": "公開期間は終了しました。\nご利用ありがとうございました！",
+                "topImageUrl": "",
+                "migiIconUrl": "",
+                "daliIconUrl": "",
+                "bgmUrl": "akachannokoushin.mp3",
+                "bgmYoutubeId": "",
+                "galleryBgmUrl": "We_Wish_You_a_Merry_Christmas.mp3",
+                "galleryBgmYoutubeId": "",
+                "unlockSoundUrl": "unlock.mp3",
+                "correctAnimUrl": "",
+                "incorrectAnimUrl": "",
+                "correctSoundUrl": "",
+                "incorrectSoundUrl": "",
+                "btnSoundUrl": "",
+                "rankSoundUrl": "close the book.mp3",
+                "randomizeQuestions": true,
+                "correctTitle": "正解（Excellent）",
+                "incorrectTitle": "不正解（Poor）",
+                // 新しいクレジット設定（初期値は空）
+                "creditText": "BGM：フリー素材 様\nSE：効果音ラボ 様",
+                "ranks": [
+                    {
+                        "threshold": 13,
+                        "title": "【ふたりでひとり級】",
+                        "msg": "完璧だ。ミギの精神状態まで完全に読み切れているじゃないか。\nミギ、よくやった。帰ったらチェリーパイをたらふく食わせてやる。",
+                        "imageUrl": ""
+                    },
+                    {
+                        "threshold": 10,
+                        "title": "【影の理解者級】",
+                        "msg": "悪くない観察眼だ。ほぼミギの演技を見抜いている。\nだがあと一歩……その僅かな油断が、一条母に付け入る隙を与えるぞ。",
+                        "imageUrl": ""
+                    },
+                    {
+                        "threshold": 7,
+                        "title": "【傍観している兄級】",
+                        "msg": "悪くない。感情に流されず見ているようだ。\n……が、時折あのミギの演技にまんまと騙されているぞ。",
+                        "imageUrl": ""
+                    },
+                    {
+                        "threshold": 5,
+                        "title": "【ミギの術中級】",
+                        "msg": "まだまだだ。完全にミギの術中にハマっている。\nその様子ではふたりでひとりを演じるどころじゃない。\nもっと冷静になれ。",
+                        "imageUrl": ""
+                    },
+                    {
+                        "threshold": 3,
+                        "title": "【オリゴン村の住人級】",
+                        "msg": "ミギのあの演技に騙されるとは……\n完全にミギの手のひらで転がされているということか。",
+                        "imageUrl": ""
+                    },
+                    {
+                        "threshold": 0,
+                        "title": "【ただの他人級】",
+                        "msg": "話にならない。完全に骨抜きにされている。復讐どころか、おむつを替えて終わるだけの人生がお似合いだ。",
+                        "imageUrl": ""
+                    }
+                ],
+                // プレイ回数ボーナス設定
+                "playCountRewards": [
+                    { "count": 2, "title": "【継続は力なり】", "msg": "2回目のプレイありがとう！\n少しずつミギのパターンが見えてきたかな？", "imageUrl": "" },
+                    { "count": 4, "title": "【研究熱心】", "msg": "4回目のプレイ！\nダリも君の熱意に関心しているようだ。", "imageUrl": "" },
+                    { "count": 6, "title": "【ミギ・ウォッチャー】", "msg": "6回目達成！\nミギの一挙一動を見逃さないその目、素晴らしい。", "imageUrl": "" },
+                    { "count": 8, "title": "【復讐の協力者】", "msg": "8回も遊んでくれるとはな。\n君はもう立派な共犯者だ。", "imageUrl": "" },
+                    { "count": 10, "title": "【ハーフ・アニバーサリー】", "msg": "記念すべき10回目！\nここまで付き合ってくれるとは…パイでもどうだ？", "imageUrl": "" },
+                    { "count": 12, "title": "【熟練の演技指導者】", "msg": "12回目。\nもはやミギよりも君のほうが演技が上手いかもしれないな。", "imageUrl": "" },
+                    { "count": 14, "title": "【オリゴン村の主】", "msg": "14回目。\nこの村の秘密も、君には隠し通せないかもしれない。", "imageUrl": "" },
+                    { "count": 16, "title": "【真実の探求者】", "msg": "16回目。\n君の執念は、一条家の闇すら暴くかもしれないな。", "imageUrl": "" },
+                    { "count": 18, "title": "【双子の絆】", "msg": "18回目。\n君はもう、ぼくたちにとって欠かせない存在だ。", "imageUrl": "" },
+                    { "count": 20, "title": "【完全攻略：最高の理解者】", "msg": "20回目達成！！信じられない！\n君こそが、ミギとダリの真の理解者だ。\nありがとう！", "imageUrl": "" }
+                ]
+            },
+            // バージョン履歴の初期データ
+            "changelog": [
+                { "version": "v1.0.0", "date": "2023.12.14", "content": "ゲーム公開\n基本機能の実装" }
+            ]
+        };
+
+        // 重要: 以前のバージョンのセーブデータ(v1)と競合しないよう、
+        // キー名を変更して全員のデータを実質リセットします。
+        const STORAGE_KEY = 'migi_game_v2_data';
+
+        // --- Utils ---
+        const generateHash = (str) => {
+            let hash = 0;
+            if (str.length === 0) return hash.toString();
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash |= 0;
+            }
+            return hash.toString();
+        };
+
+        // --- LocalStorage Helper (New) ---
+        const loadFromStorage = (key, defaultVal) => {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    return parsed[key] !== undefined ? parsed[key] : defaultVal;
+                }
+            } catch(e) {}
+            return defaultVal;
+        };
+
+        // --- Icons (SVG Path Data - Lightweight) ---
+        const IconBase = ({ d, children, className, ...props }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+                {d ? <path d={d} /> : children}
+            </svg>
+        );
+
+        const BabyBottleIcon = (props) => <IconBase {...props} viewBox="0 0 24 24"><path d="M9 2h6" /><path d="M10 2v3h4V2" /><path d="M7 5h10v2c0 1.5-1 3-5 3s-5-1.5-5-3V5z" /><path d="M6 10h12v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V10z" /><path d="M6 14h12" opacity="0.5"/></IconBase>;
+        const MijinkoIcon = (props) => <IconBase {...props} viewBox="0 0 24 24"><ellipse cx="12" cy="10" rx="5" ry="8" /><path d="M12 2v2" /><path d="M10 4l-3-2" /><path d="M14 4l3-2" /><path d="M12 18l-2 4" /><path d="M12 18l2 4" /><circle cx="12" cy="8" r="1" fill="currentColor"/></IconBase>;
+        const Cherry = (props) => (
+            <IconBase {...props} viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <path d="M19.07 13.88a4.93 4.93 0 0 0-4.13 1.52c-.67.76-1.07 1.76-1.07 2.85 0 2.21 1.79 4 4 4s4-1.79 4-4a3.94 3.94 0 0 0-2.8-3.77zM7.07 13c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z" />
+                <path d="M7 14.5c0-4.5 3-9 8.5-11.5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+                <path d="M18 15c0-3-2-6-5-7.5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+                <path d="M15.5 3c1 0 2 .5 2.5 1.5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+            </IconBase>
+        );
+        
+        const Baby = (props) => <IconBase {...props}><path d="M9 12h.01"/><path d="M15 12h.01"/><path d="M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5"/><path d="M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1"/></IconBase>;
+        const Trash2 = (props) => <IconBase {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></IconBase>;
+        const Save = (props) => <IconBase {...props}><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></IconBase>;
+        const X = (props) => <IconBase {...props}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></IconBase>;
+        const Edit3 = (props) => <IconBase {...props}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></IconBase>;
+        const Lock = (props) => <IconBase {...props}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></IconBase>;
+        const Copy = (props) => <IconBase {...props}><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></IconBase>;
+        const Eye = (props) => <IconBase {...props}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></IconBase>;
+        const EyeOff = (props) => <IconBase {...props}><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7c.44 0 .87-.03 1.28-.09"/><line x1="2" x2="22" y1="2" y2="22"/></IconBase>;
+        const Check = (props) => <IconBase {...props}><polyline points="20 6 9 17 4 12"/></IconBase>;
+        const Music = (props) => <IconBase {...props}><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></IconBase>;
+        const Youtube = (props) => <IconBase {...props}><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17" /><path d="m10 15 5-3-5-3z" /></IconBase>;
+        const Volume2 = (props) => <IconBase {...props}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></IconBase>;
+        const VolumeX = (props) => <IconBase {...props}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" x2="17" y1="9" y2="15"/><line x1="17" x2="23" y1="9" y2="15"/></IconBase>;
+        const Home = (props) => <IconBase {...props}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></IconBase>;
+        const AlertCircle = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></IconBase>;
+        const Settings = (props) => <IconBase {...props}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></IconBase>;
+        const RefreshCw = (props) => <IconBase {...props}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 21h5v-5" /></IconBase>;
+        const Volume1 = (props) => <IconBase {...props}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></IconBase>;
+        const Globe = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10" /><line x1="2" x2="22" y1="12" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z" /></IconBase>;
+        const Gift = (props) => <IconBase {...props}><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13" /><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" /><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5" /></IconBase>;
+        const ChevronUp = (props) => <IconBase {...props}><polyline points="18 15 12 9 6 15" /></IconBase>;
+        const ChevronDown = (props) => <IconBase {...props}><polyline points="6 9 12 15 18 9" /></IconBase>;
+        const AlignJustify = (props) => <IconBase {...props}><line x1="21" x2="3" y1="6" y2="6"/><line x1="21" x2="3" y1="12" y2="12"/><line x1="21" x2="3" y1="18" y2="18"/></IconBase>;
+        const Trophy = (props) => <IconBase {...props}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></IconBase>;
+        const Info = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></IconBase>;
+        const FileText = (props) => <IconBase {...props}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></IconBase>;
+        const Sparkles = (props) => <IconBase {...props}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></IconBase>;
+
+        // --- TOAST NOTIFICATION COMPONENT ---
+        const ToastContainer = ({ toasts, removeToast }) => {
+            return (
+                <div className="fixed top-16 left-4 z-[100] flex flex-col gap-2 pointer-events-none">
+                    {toasts.map(toast => (
+                        <Toast key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} />
+                    ))}
+                </div>
+            );
+        };
+
+        const Toast = ({ toast, onClose }) => {
+            useEffect(() => {
+                const timer = setTimeout(() => {
+                    onClose();
+                }, 4000); // 変更: 2500ms -> 4000ms (4秒) に戻す
+                return () => clearTimeout(timer);
+            }, [onClose]);
+
+            return (
+                <div className="bg-slate-800/90 backdrop-blur-sm text-white px-4 py-3 rounded-lg shadow-xl flex items-start gap-3 animate-slideInLeft max-w-xs border-l-4 border-yellow-400 pointer-events-auto">
+                    <Trophy className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-xs font-bold text-yellow-400 mb-0.5">実績解除！</p>
+                        <p className="text-sm font-bold whitespace-pre-wrap leading-tight">{toast.msg}</p>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- CUSTOM MODAL COMPONENT ---
+        const CustomModal = ({ isOpen, type, message, onConfirm, onCancel, content, imageUrl }) => {
+            if (!isOpen) return null;
+
+            // 新しい画像閲覧モード (全体表示)
+            if (type === 'IMAGE') {
+                return (
+                    <div className="fixed inset-0 bg-black/95 z-[110] flex flex-col items-center justify-center p-4 animate-fadeIn" onClick={onCancel}>
+                        <button 
+                            onClick={onCancel} 
+                            className="absolute top-4 right-4 text-white/70 bg-black/50 rounded-full p-2 hover:bg-white/20 hover:text-white transition-colors z-[120]"
+                        >
+                            <X className="w-8 h-8" />
+                        </button>
+                        
+                        <div className="flex flex-col items-center max-w-4xl w-full h-full" onClick={e => e.stopPropagation()}>
+                            {/* 画像エリア: 画面の大部分を使う */}
+                            <div className="flex-1 min-h-0 flex items-center justify-center w-full mb-4 relative">
+                                <img src={imageUrl} className="max-w-full max-h-full object-contain drop-shadow-2xl rounded" alt="Reward" />
+                            </div>
+                            
+                            {/* テキストエリア: 画像の下に表示 (重ならないように配置) */}
+                            {message && (
+                                <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-xl w-full max-w-lg shadow-xl shrink-0 overflow-y-auto max-h-[30vh] text-white">
+                                    {content && <div className="mb-2 font-bold text-yellow-400 text-lg border-b border-white/20 pb-2">{content}</div>}
+                                    <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap">{message}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            // 通常のモーダル
+            return (
+                <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-fadeIn">
+                    <div className="bg-white p-6 rounded-lg max-w-md w-full shadow-2xl transform scale-100 transition-transform max-h-[80vh] overflow-y-auto">
+                        <div className="flex flex-col items-center text-center">
+                            {type === 'ALERT' ? (
+                                <AlertCircle className="w-12 h-12 text-yellow-500 mb-4" />
+                            ) : type === 'INFO' ? (
+                                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-600 font-bold text-xl"><Info className="w-6 h-6"/></div>
+                            ) : (
+                                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-600 font-bold text-xl">?</div>
+                            )}
+                            
+                            {message && <p className="text-slate-800 font-bold mb-6 whitespace-pre-wrap">{message}</p>}
+                            
+                            {/* 履歴リスト表示用エリア */}
+                            {type === 'INFO' && content && (
+                                <div className="w-full text-left mb-6">
+                                    {content}
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 w-full">
+                                {type === 'CONFIRM' && (
+                                    <button onClick={onCancel} className="flex-1 border border-slate-300 py-2 rounded text-slate-600 hover:bg-slate-50 font-bold">キャンセル</button>
+                                )}
+                                <button 
+                                    onClick={onConfirm} 
+                                    className={`flex-1 py-2 rounded text-white font-bold shadow-md ${type === 'ALERT' ? 'bg-slate-800 hover:bg-slate-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                >
+                                    OK
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        function App() {
+            // Initialize with LocalStorage
+            const [questions, setQuestions] = useState(() => loadFromStorage('questions', INITIAL_DATA.questions));
+            
+            // Config requires special merge logic for backward compatibility
+            const [config, setConfig] = useState(() => {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        const mergedConfig = { ...INITIAL_DATA.config, ...(parsed.config || {}) };
+                        if (!mergedConfig.ranks || mergedConfig.ranks.length === 0) {
+                            mergedConfig.ranks = INITIAL_DATA.config.ranks;
+                        }
+                        if (!mergedConfig.playCountRewards) {
+                            mergedConfig.playCountRewards = INITIAL_DATA.config.playCountRewards;
+                        }
+                        // マージ漏れを防ぐ
+                        if (!mergedConfig.galleryBgmUrl && INITIAL_DATA.config.galleryBgmUrl) {
+                            mergedConfig.galleryBgmUrl = INITIAL_DATA.config.galleryBgmUrl;
+                        }
+                        if (!mergedConfig.unlockSoundUrl && INITIAL_DATA.config.unlockSoundUrl) {
+                            mergedConfig.unlockSoundUrl = INITIAL_DATA.config.unlockSoundUrl;
+                        }
+                        if (!mergedConfig.creditText && INITIAL_DATA.config.creditText) {
+                            mergedConfig.creditText = INITIAL_DATA.config.creditText;
+                        }
+                        return mergedConfig;
+                    } catch(e) { return INITIAL_DATA.config; }
+                }
+                return INITIAL_DATA.config;
+            });
+
+            // Changelog (Version History)
+            const [changelog, setChangelog] = useState(() => loadFromStorage('changelog', INITIAL_DATA.changelog || []));
+            
+            // Viewed Version (New)
+            const [lastViewedVersion, setLastViewedVersion] = useState(() => loadFromStorage('lastViewedVersion', ''));
+
+            // Unlock Status (Gallery)
+            const [unlockedRanks, setUnlockedRanks] = useState(() => loadFromStorage('unlockedRanks', []));
+            const [totalPlayCount, setTotalPlayCount] = useState(() => parseInt(loadFromStorage('totalPlayCount', 0)));
+            const [unlockedPlayCounts, setUnlockedPlayCounts] = useState(() => loadFromStorage('unlockedPlayCounts', []));
+
+            const [gameState, setGameState] = useState('START'); // START, PLAYING, RESULT, END, ADMIN, CLOSED, GALLERY
+            const [score, setScore] = useState(0);
+            const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+            const [lastAnswerCorrect, setLastAnswerCorrect] = useState(false);
+            const [shake, setShake] = useState(false);
+            const [playQuestions, setPlayQuestions] = useState([]);
+            const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+            
+            // Toast
+            const [toasts, setToasts] = useState([]);
+
+            // Admin
+            const [isAdminMode, setIsAdminMode] = useState(false);
+            const [showAdminLogin, setShowAdminLogin] = useState(false);
+            const [inputPassword, setInputPassword] = useState("");
+            const [newAdminPassword, setNewAdminPassword] = useState("");
+            
+            // Title Click Counter (Simple 5 clicks)
+            const [titleClickCount, setTitleClickCount] = useState(0);
+
+            const [tempQuestions, setTempQuestions] = useState([]);
+            const [tempConfig, setTempConfig] = useState({});
+            const [tempChangelog, setTempChangelog] = useState([]); // Admin editing changelog
+
+            const [showPassword, setShowPassword] = useState(false);
+            const [copySuccess, setCopySuccess] = useState(false);
+            const [isDistributionMode, setIsDistributionMode] = useState(false);
+            
+            const [modalConfig, setModalConfig] = useState({ isOpen: false, type: 'ALERT', message: '', onConfirm: () => {}, onCancel: () => {}, content: null, imageUrl: null });
+
+            const bgmRef = useRef(null);
+            const playerRef = useRef(null);
+
+            // --- Auto Mark Version as Viewed (New) ---
+            // ページを開いた時点で、裏側で「最新版を見た」と記録する。
+            // これにより、クリックしなくても次回アクセス時にはNEWが消える。
+            useEffect(() => {
+                if (changelog.length > 0) {
+                    const latest = changelog[0].version;
+                    if (latest !== lastViewedVersion) {
+                        try {
+                            const saved = localStorage.getItem(STORAGE_KEY);
+                            const parsed = saved ? JSON.parse(saved) : {};
+                            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                                ...parsed,
+                                lastViewedVersion: latest
+                            }));
+                            // 注: ここで state を更新しないことで、
+                            // 「今のセッションではNEWを表示したまま」にしつつ、
+                            // 「次回リロード時には消える」という挙動になります。
+                        } catch(e) {}
+                    }
+                }
+            }, [changelog, lastViewedVersion]);
+
+            // --- FOUC / Flicker Prevention ---
+            useEffect(() => {
+                // Reactがマウントされたら、rootの透明度を解除して表示する
+                const rootEl = document.getElementById('root');
+                if (rootEl) {
+                    // 少し遅延を入れて確実にレンダリング後を狙う
+                    requestAnimationFrame(() => {
+                        rootEl.style.opacity = '1';
+                    });
+                }
+            }, []);
+
+            // --- Background Items ---
+            const [bgItems, setBgItems] = useState([]);
+            useEffect(() => {
+                const items = [];
+                for (let i = 0; i < 15; i++) { // Reduced count
+                    const isRare = Math.random() < 0.05; 
+                    const type = isRare ? 'MIJINKO' : (Math.random() < 0.5 ? 'CHERRY' : 'BOTTLE');
+                    items.push({
+                        id: i,
+                        type,
+                        top: Math.random() * 100,
+                        left: Math.random() * 100,
+                        rotate: Math.random() * 360,
+                        // HUGE scale: 4x to 10x
+                        scale: 4 + Math.random() * 6,
+                        // Low opacity
+                        opacity: 0.08, 
+                        animDuration: 20 + Math.random() * 30
+                    });
+                }
+                setBgItems(items);
+            }, []);
+
+            // --- Helper: Show Modal / Toast ---
+            const showModal = (type, message, onConfirm, content = null, imageUrl = null) => {
+                setModalConfig({
+                    isOpen: true,
+                    type,
+                    message,
+                    content,
+                    imageUrl,
+                    onConfirm: () => {
+                        if (onConfirm) onConfirm();
+                        setModalConfig(prev => ({ ...prev, isOpen: false }));
+                    },
+                    onCancel: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+                });
+            };
+            
+            const showAlert = (message) => showModal('ALERT', message);
+            const showConfirm = (message, onYes) => showModal('CONFIRM', message, onYes);
+            
+            const showChangelogModal = () => {
+                // Modalを開いたときも即座に既読状態（表示上も消す）にする
+                if (changelog.length > 0) {
+                    const latest = changelog[0].version;
+                    setLastViewedVersion(latest);
+                }
+
+                const sortedLog = [...changelog].sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date desc
+                const content = (
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                        {sortedLog.length > 0 ? sortedLog.map((log, i) => (
+                            <div key={i} className="border-b border-slate-200 pb-3 last:border-0">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="font-bold text-slate-800 text-sm">{log.version}</span>
+                                    <span className="text-xs text-slate-400">{log.date}</span>
+                                </div>
+                                <div className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">
+                                    {log.content}
+                                </div>
+                            </div>
+                        )) : <p className="text-center text-slate-400 text-xs">履歴はありません</p>}
+                    </div>
+                );
+                showModal('INFO', '更新履歴', null, content);
+            };
+
+            const addToast = (msg) => {
+                const id = Date.now() + Math.random();
+                setToasts(prev => [...prev, { id, msg }]);
+            };
+            
+            const removeToast = (id) => {
+                setToasts(prev => prev.filter(t => t.id !== id));
+            };
+
+
+            // --- YouTube API Loader ---
+            useEffect(() => {
+                if (!window.YT) {
+                    const tag = document.createElement('script');
+                    tag.src = "https://www.youtube.com/iframe_api";
+                    const firstScriptTag = document.getElementsByTagName('script')[0];
+                    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+                    window.onYouTubeIframeAPIReady = loadVideo;
+                } else {
+                    loadVideo();
+                }
+            }, []);
+
+            const loadVideo = () => {
+                if (!window.YT) return;
+                if (playerRef.current) return;
+                // 最初はどちらかのIDがあればロードを試みる
+                const initialId = config.bgmYoutubeId || config.galleryBgmYoutubeId;
+                if (!initialId) return;
+
+                try {
+                    playerRef.current = new window.YT.Player('youtube-player-hidden', {
+                        height: '1',
+                        width: '1',
+                        videoId: initialId,
+                        playerVars: {
+                            'playsinline': 1,
+                            'controls': 0,
+                            'loop': 1,
+                            'playlist': initialId
+                        },
+                        events: {
+                            'onReady': onPlayerReady,
+                            'onError': onPlayerError,
+                        }
+                    });
+                } catch(e) { console.log(e); }
+            };
+
+            const onPlayerReady = (event) => {
+                 event.target.setVolume(20);
+            };
+            
+            const onPlayerError = (event) => {
+                 // Error handling omitted for brevity but keeping same structure
+            };
+
+            useEffect(() => {
+                // Determine which ID to use based on gameState
+                const targetId = (gameState === 'GALLERY' && config.galleryBgmYoutubeId) 
+                    ? config.galleryBgmYoutubeId 
+                    : config.bgmYoutubeId;
+
+                if (playerRef.current && playerRef.current.loadVideoById && targetId) {
+                     // 現在再生中のIDと同じならロードしないなどの最適化も可能だが、
+                     // 簡易的に毎回ロード（シークがリセットされるが切り替えとしては確実）
+                     // ただし曲が変わらない場合はリロードしないようにする
+                     try {
+                        const currentUrl = playerRef.current.getVideoUrl();
+                        if (!currentUrl || !currentUrl.includes(targetId)) {
+                             playerRef.current.loadVideoById(targetId);
+                        }
+                     } catch(e) {
+                         playerRef.current.loadVideoById(targetId);
+                     }
+                } else if (!playerRef.current && window.YT && targetId) {
+                     loadVideo();
+                }
+            }, [config.bgmYoutubeId, config.galleryBgmYoutubeId, gameState]);
+
+
+            useEffect(() => {
+                // If Game is NOT Active, don't play
+                if (config.isGameActive === false && gameState !== 'ADMIN') return;
+
+                // 修正: START画面ではBGMを再生しないように変更
+                // PLAYING, RESULT, END, GALLERY の時のみ再生対象とする
+                const isBgmActiveState = ['PLAYING', 'RESULT', 'END', 'GALLERY'].includes(gameState);
+                const shouldPlay = isBgmActiveState && isSoundEnabled;
+                
+                // Determine Target
+                const targetYoutubeId = (gameState === 'GALLERY' && config.galleryBgmYoutubeId) ? config.galleryBgmYoutubeId : config.bgmYoutubeId;
+                const targetMp3Url = (gameState === 'GALLERY' && config.galleryBgmUrl) ? config.galleryBgmUrl : config.bgmUrl;
+
+                // 1. YouTube Control
+                if (playerRef.current && playerRef.current.playVideo) {
+                    if (shouldPlay && targetYoutubeId) {
+                        playerRef.current.unMute();
+                        playerRef.current.playVideo();
+                    } else {
+                        playerRef.current.pauseVideo();
+                    }
+                }
+
+                // 2. MP3 Control (Only if YouTube is not active for this mode)
+                if (bgmRef.current) {
+                    if (targetYoutubeId) {
+                        // If YouTube is active, stop MP3
+                        bgmRef.current.pause();
+                    } else if (targetMp3Url && shouldPlay) {
+                        // Check if source needs update
+                        let isSrcDifferent = false;
+                        try {
+                            // Try to compare absolute URLs to prevent unnecessary reloading
+                            if (bgmRef.current.src !== new URL(targetMp3Url, window.location.href).href) {
+                                isSrcDifferent = true;
+                            }
+                        } catch (e) {
+                            // Fallback for invalid URLs or other errors: compare raw attribute
+                            if (bgmRef.current.getAttribute('src') !== targetMp3Url) {
+                                isSrcDifferent = true;
+                            }
+                        }
+
+                        if (isSrcDifferent) {
+                            bgmRef.current.src = targetMp3Url;
+                            bgmRef.current.loop = true;
+                            bgmRef.current.volume = 0.3;
+                        }
+                        bgmRef.current.play().catch(e => {});
+                    } else {
+                        bgmRef.current.pause();
+                    }
+                }
+            }, [gameState, config, isSoundEnabled]);
+            
+
+            const playSound = (url) => {
+                if (!url || !isSoundEnabled) return;
+                const audio = new Audio(url);
+                audio.volume = 0.5;
+                audio.play().catch(e => console.log("Audio play failed"));
+            };
+
+            // --- Admin Handlers ---
+            const handleTitleClick = () => {
+                // Allow title click on START screen AND on CLOSED screen
+                if (gameState !== 'START' && gameState !== 'CLOSED') return;
+                
+                // Locked Check
+                if (config.lockAdmin) return; 
+
+                const newCount = titleClickCount + 1;
+                setTitleClickCount(newCount);
+                if (newCount >= 10) { // 10 Clicks Trigger
+                    setShowAdminLogin(true);
+                    setTitleClickCount(0);
+                }
+            };
+            
+            const handleGoTop = () => {
+                // 【変更点】ギャラリーから戻る場合は確認なしで戻る
+                if (gameState === 'GALLERY') {
+                    setGameState('START');
+                    return;
+                }
+                
+                showConfirm("TOP画面に戻りますか？\n（進行状況はリセットされます）", () => {
+                    setGameState('START');
+                    setScore(0);
+                    setCurrentQuestionIndex(0);
+                });
+            };
+
+            const handleAdminLogin = () => {
+                const inputHash = generateHash(inputPassword);
+                const isDefaultKey = config._s_key === "-1421062635";
+                
+                if (inputHash === config._s_key || (isDefaultKey && inputPassword === "md121212")) {
+                    setIsAdminMode(true);
+                    setShowAdminLogin(false);
+                    setGameState('ADMIN');
+                    setTempQuestions([...questions]);
+                    setTempConfig({...config});
+                    setTempChangelog([...changelog]); // Load changelog for edit
+                    setNewAdminPassword(""); 
+                } else {
+                    showAlert("パスワードが違います");
+                }
+            };
+
+            const handleSaveAdminData = () => {
+                let finalConfig = { ...tempConfig };
+                if (newAdminPassword.trim() !== "") {
+                   const newHash = generateHash(newAdminPassword);
+                   finalConfig._s_key = newHash;
+                }
+                
+                setQuestions(tempQuestions);
+                setConfig(finalConfig);
+                setChangelog(tempChangelog); // Save changelog
+                
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                        questions: tempQuestions,
+                        config: finalConfig,
+                        changelog: tempChangelog, // Save to storage
+                        unlockedRanks: unlockedRanks,
+                        totalPlayCount: totalPlayCount,
+                        unlockedPlayCounts: unlockedPlayCounts,
+                        lastViewedVersion: lastViewedVersion // Keep status
+                    }));
+                    showAlert("【ブラウザに保存しました】\nこのブラウザでは、再読み込みしても設定が維持されます。\n\n※友人に送るなど、ファイル自体を更新したい場合は、下の「HTMLコピー」を使って保存し直してください。");
+                } catch (e) {
+                    showAlert("ブラウザへの保存に失敗しました。\nプライベートモードなどが原因の可能性があります。");
+                }
+            };
+            
+            const handleClearLocalStorage = () => {
+                showConfirm("ブラウザに保存されたデータを削除し、初期状態（ファイルの状態）に戻しますか？", () => {
+                    localStorage.removeItem(STORAGE_KEY);
+                    setQuestions(INITIAL_DATA.questions);
+                    setConfig(INITIAL_DATA.config);
+                    setChangelog(INITIAL_DATA.changelog || []);
+                    setTempQuestions(INITIAL_DATA.questions);
+                    setTempConfig(INITIAL_DATA.config);
+                    setTempChangelog(INITIAL_DATA.changelog || []);
+                    setUnlockedRanks([]);
+                    setTotalPlayCount(0);
+                    setUnlockedPlayCounts([]);
+                    setLastViewedVersion('');
+                    showAlert("保存データを削除しました。\n初期設定に戻ります。");
+                });
+            };
+
+            // --- 新機能: 実績データリセット ---
+            const handleResetAchievements = () => {
+                showConfirm("【注意】\nプレイ回数と解放された実績（ランク・ボーナス）のみをリセットします。\n\n設定や問題データは消えません。\n配布前にデータをクリーンにする場合などに便利です。\n実行しますか？", () => {
+                    // State Update
+                    setUnlockedRanks([]);
+                    setTotalPlayCount(0);
+                    setUnlockedPlayCounts([]);
+                    setLastViewedVersion(''); // バージョン未読状態に戻す
+                    
+                    // LocalStorage Update
+                    try {
+                        const saved = localStorage.getItem(STORAGE_KEY);
+                        const parsed = saved ? JSON.parse(saved) : {};
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                            ...parsed,
+                            unlockedRanks: [],
+                            totalPlayCount: 0,
+                            unlockedPlayCounts: [],
+                            lastViewedVersion: ''
+                        }));
+                        showAlert("実績とプレイ履歴をリセットしました。");
+                    } catch(e) {
+                        showAlert("保存に失敗しました。");
+                    }
+                });
+            };
+
+            // --- Changelog Editor Handlers ---
+            const handleUpdateChangelog = (idx, field, value) => {
+                const newLog = [...tempChangelog];
+                newLog[idx] = { ...newLog[idx], [field]: value };
+                setTempChangelog(newLog);
+            };
+
+            const handleAddChangelog = () => {
+                const today = new Date().toLocaleDateString('ja-JP').replace(/\//g, '.');
+                // Add to TOP
+                setTempChangelog([{ version: "v1.0.X", date: today, content: "更新内容" }, ...tempChangelog]);
+            };
+
+            const handleDeleteChangelog = (idx) => {
+                showConfirm("この履歴を削除しますか？", () => {
+                    const newLog = tempChangelog.filter((_, i) => i !== idx);
+                    setTempChangelog(newLog);
+                });
+            };
+
+            const handleSetDefaultSounds = () => {
+                 setTempConfig(prev => ({
+                     ...prev,
+                     correctSoundUrl: DEFAULT_SOUNDS.correct,
+                     incorrectSoundUrl: DEFAULT_SOUNDS.incorrect,
+                     btnSoundUrl: DEFAULT_SOUNDS.btn,
+                     unlockSoundUrl: DEFAULT_SOUNDS.unlock
+                 }));
+                 showAlert("標準のSE（内蔵音源）をセットしました。");
+            };
+
+            const validateSEUrl = (key, value) => {
+                 setTempConfig(prev => ({ ...prev, [key]: value }));
+            };
+
+            // --- HTML Copy Function ---
+            const handleCopyHTML = () => {
+                let exportConfig = { ...tempConfig };
+                if (newAdminPassword.trim() !== "") {
+                   exportConfig._s_key = generateHash(newAdminPassword);
+                } else {
+                   exportConfig._s_key = config._s_key; 
+                }
+                
+                if (isDistributionMode) {
+                    exportConfig.lockAdmin = true;
+                } else {
+                    exportConfig.lockAdmin = false;
+                }
+
+                // Export changelog as well
+                const compactData = JSON.stringify({ 
+                    questions: tempQuestions, 
+                    config: exportConfig,
+                    changelog: tempChangelog 
+                });
+
+                const htmlContent = document.documentElement.outerHTML.replace(
+                    /const\s+INITIAL_DATA\s*=\s*\{[\s\S]*?\};/, 
+                    `const INITIAL_DATA = ${compactData};`
+                );
+                
+                if (htmlContent === document.documentElement.outerHTML) {
+                     showAlert("エラー：データの書き換えに失敗しました。\n正規表現がマッチしませんでした。");
+                     return;
+                }
+
+                const textArea = document.createElement("textarea");
+                textArea.value = htmlContent;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-9999px";
+                textArea.style.top = "0";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
+                try {
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        setCopySuccess(true);
+                        setTimeout(() => setCopySuccess(false), 2000);
+                        const modeMsg = isDistributionMode ? "\n【重要】「配布用ロック」が有効です。\nこのファイルでは管理者モードが開けなくなります。" : "";
+                        showAlert(`HTMLコードをコピーしました！${modeMsg}\n\nメモ帳などに貼り付けて「.html」で保存してください。`);
+                    } else {
+                        showAlert("コピーに失敗しました。");
+                    }
+                } catch (err) {
+                    showAlert("コピー中にエラーが発生しました。");
+                }
+                document.body.removeChild(textArea);
+            };
+
+            const handleUpdateQuestion = (idx, field, value) => {
+                const newQ = [...tempQuestions];
+                newQ[idx] = { ...newQ[idx], [field]: value };
+                setTempQuestions(newQ);
+            };
+
+            const handleAddQuestion = () => {
+                const newId = Math.max(...tempQuestions.map(q => q.id || 0), 0) + 1;
+                setTempQuestions([...tempQuestions, { id: newId, text: "新しい問題", type: "MIGI", situation: "", explanation: "", daliComment: "" }]);
+            };
+
+            const handleDeleteQuestion = (idx) => {
+                showConfirm("削除しますか？", () => {
+                    const newQ = tempQuestions.filter((_, i) => i !== idx);
+                    setTempQuestions(newQ);
+                });
+            };
+
+            // --- Rank Editor Handlers (Updated) ---
+            const handleUpdateRank = (idx, field, value) => {
+                const newRanks = [...tempConfig.ranks];
+                newRanks[idx] = { ...newRanks[idx], [field]: value };
+                setTempConfig({ ...tempConfig, ranks: newRanks });
+            };
+
+            const handleAddRank = () => {
+                const newRank = {
+                    threshold: 0,
+                    title: "新しいランク",
+                    msg: "メッセージを入力してください",
+                    imageUrl: ""
+                };
+                // Set to top of the list
+                setTempConfig({ ...tempConfig, ranks: [newRank, ...tempConfig.ranks] });
+            };
+
+            const handleDeleteRank = (idx) => {
+                showConfirm("このランク設定を削除しますか？", () => {
+                    const newRanks = tempConfig.ranks.filter((_, i) => i !== idx);
+                    setTempConfig({ ...tempConfig, ranks: newRanks });
+                });
+            };
+
+            const handleMoveRank = (idx, direction) => { // direction: -1 (up), 1 (down)
+                if (idx + direction < 0 || idx + direction >= tempConfig.ranks.length) return;
+                const newRanks = [...tempConfig.ranks];
+                // Swap
+                const temp = newRanks[idx];
+                newRanks[idx] = newRanks[idx + direction];
+                newRanks[idx + direction] = temp;
+                setTempConfig({ ...tempConfig, ranks: newRanks });
+            };
+
+            // New Sort Function
+            const handleSortRanks = () => {
+                const sorted = [...tempConfig.ranks].sort((a, b) => b.threshold - a.threshold);
+                setTempConfig({ ...tempConfig, ranks: sorted });
+                showAlert("正解数が多い順に並び替えました！\n（判定は上から順に行われます）");
+            };
+
+            // --- Play Count Reward Editor ---
+            const handleUpdatePlayReward = (idx, field, value) => {
+                const newRewards = [...(tempConfig.playCountRewards || [])];
+                newRewards[idx] = { ...newRewards[idx], [field]: value };
+                setTempConfig({ ...tempConfig, playCountRewards: newRewards });
+            };
+            
+            const handleAddPlayReward = () => {
+                const newRewards = [...(tempConfig.playCountRewards || [])];
+                newRewards.push({ count: 10, title: "新規実績", msg: "メッセージ", imageUrl: "" });
+                newRewards.sort((a, b) => a.count - b.count);
+                setTempConfig({ ...tempConfig, playCountRewards: newRewards });
+            };
+
+            const handleDeletePlayReward = (idx) => {
+                 showConfirm("削除しますか？", () => {
+                    const newRewards = tempConfig.playCountRewards.filter((_, i) => i !== idx);
+                    setTempConfig({ ...tempConfig, playCountRewards: newRewards });
+                 });
+            };
+
+            // --- Game Logic ---
+            const handleStart = () => {
+                playSound(config.btnSoundUrl);
+                let q = [...questions];
+                if(config.randomizeQuestions) q.sort(() => Math.random() - 0.5);
+                setPlayQuestions(q);
+                setGameState('PLAYING');
+                setCurrentQuestionIndex(0);
+                setScore(0);
+            };
+
+            const handleAnswer = (type) => {
+                playSound(config.btnSoundUrl);
+                const isCorrect = type === playQuestions[currentQuestionIndex].type;
+                setLastAnswerCorrect(isCorrect);
+                if (isCorrect) {
+                    setScore(s => s + 1);
+                    setTimeout(() => playSound(config.correctSoundUrl), 300);
+                } else {
+                    setShake(true);
+                    setTimeout(() => setShake(false), 500);
+                    setTimeout(() => playSound(config.incorrectSoundUrl), 300);
+                }
+                setGameState('RESULT');
+            };
+
+            const nextQuestion = () => {
+                playSound(config.btnSoundUrl);
+                if (currentQuestionIndex < playQuestions.length - 1) {
+                    setCurrentQuestionIndex(i => i + 1);
+                    setGameState('PLAYING');
+                } else {
+                    setGameState('END');
+                }
+            };
+
+            const currentQ = playQuestions[currentQuestionIndex];
+
+            // ランク計算ロジック
+            const getCurrentRank = () => {
+                if (!config.ranks || config.ranks.length === 0) return null;
+                return config.ranks.find(r => score >= r.threshold) || config.ranks[config.ranks.length - 1];
+            };
+
+            const currentRank = getCurrentRank();
+
+            // ランク解放処理 & プレイ回数処理 (END画面遷移時)
+            useEffect(() => {
+                if (gameState === 'END') {
+                    // 1. Play Count Increment
+                    const newPlayCount = totalPlayCount + 1;
+                    setTotalPlayCount(newPlayCount);
+
+                    // 2. Rank Unlock Check
+                    if (currentRank) {
+                        if (!unlockedRanks.includes(currentRank.title)) {
+                            // New Rank Unlocked!
+                            const newUnlocked = [...unlockedRanks, currentRank.title];
+                            setUnlockedRanks(newUnlocked);
+                            // Show Toast for Rank
+                            setTimeout(() => {
+                                 addToast(`ランク\n『${currentRank.title}』`);
+                                 if (config.unlockSoundUrl) playSound(config.unlockSoundUrl);
+                            }, 500); // 少し遅らせて表示
+                        } else {
+                            // Already unlocked, just play rank sound
+                            if (config.rankSoundUrl) playSound(config.rankSoundUrl);
+                        }
+                    }
+                    
+                    // 3. Play Count Reward Unlock Check
+                    const newlyUnlockedRewards = [];
+                    const updatedUnlockedPlayCounts = [...unlockedPlayCounts];
+                    
+                    if (config.playCountRewards) {
+                        config.playCountRewards.forEach(reward => {
+                            if (newPlayCount >= reward.count && !updatedUnlockedPlayCounts.includes(reward.count)) {
+                                updatedUnlockedPlayCounts.push(reward.count);
+                                newlyUnlockedRewards.push(reward);
+                            }
+                        });
+                    }
+
+                    if (newlyUnlockedRewards.length > 0) {
+                        setUnlockedPlayCounts(updatedUnlockedPlayCounts);
+                        // Notify with Toast
+                        newlyUnlockedRewards.forEach((reward, i) => {
+                             setTimeout(() => {
+                                 addToast(`${reward.title}`);
+                                 if (config.unlockSoundUrl) playSound(config.unlockSoundUrl);
+                             }, 1500 + (i * 1000)); // ランク通知の後に出す
+                        });
+                    }
+
+                    // Save All
+                    try {
+                        const saved = localStorage.getItem(STORAGE_KEY);
+                        const parsed = saved ? JSON.parse(saved) : {};
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                            ...parsed,
+                            unlockedRanks: !unlockedRanks.includes(currentRank.title) ? [...unlockedRanks, currentRank.title] : unlockedRanks,
+                            totalPlayCount: newPlayCount,
+                            unlockedPlayCounts: updatedUnlockedPlayCounts
+                        }));
+                    } catch(e) {}
+                }
+            }, [gameState]); // Run when gameState becomes END
+
+
+            // --- RENDER ---
+            
+            const showClosedScreen = !config.isGameActive && gameState !== 'ADMIN';
+            
+            // Get latest version info
+            const latestVersion = changelog && changelog.length > 0 ? changelog[0] : null;
+            // Get simplified update message (first line)
+            const updateMessage = latestVersion ? latestVersion.content.split('\n')[0] : "";
+
+            return (
+                // Scroll fix: added overflow-y-auto and overflow-x-hidden to main container
+                <div className="min-h-screen relative overflow-y-auto overflow-x-hidden flex flex-col font-sans">
+                    {/* Toast Container */}
+                    <ToastContainer toasts={toasts} removeToast={removeToast} />
+                    
+                    <CustomModal 
+                        isOpen={modalConfig.isOpen} 
+                        type={modalConfig.type} 
+                        message={modalConfig.message} 
+                        onConfirm={modalConfig.onConfirm} 
+                        onCancel={modalConfig.onCancel}
+                        content={modalConfig.content}
+                        imageUrl={modalConfig.imageUrl}
+                    />
+
+                    {/* Header */}
+                    <div className="fixed top-0 left-0 w-full h-2 bg-gradient-to-r from-slate-900 via-red-500 to-slate-900 z-50 flex justify-between items-center"></div>
+                    
+                    {/* Version Info (Left Bottom) - Admin以外の画面で表示 */}
+                    {gameState !== 'ADMIN' && latestVersion && (
+                        <div 
+                            className="fixed bottom-2 left-2 z-[80] group cursor-pointer"
+                            onClick={showChangelogModal}
+                            title="更新履歴を見る"
+                        >
+                            <div className="bg-white/70 backdrop-blur-sm border border-slate-200 px-3 py-2 rounded-lg shadow-sm hover:shadow-md hover:bg-white transition-all flex items-start gap-2 max-w-[200px] md:max-w-xs">
+                                {latestVersion.version !== lastViewedVersion && (
+                                    <div className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0 mt-0.5">
+                                        <Sparkles className="w-2 h-2" /> NEW
+                                    </div>
+                                )}
+                                <div className="flex flex-col">
+                                    <div className="flex items-baseline gap-2 mb-0.5">
+                                        <span className="font-bold text-xs text-slate-800">{latestVersion.version}</span>
+                                        <span className="text-[10px] text-slate-500">{latestVersion.date}</span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-600 font-bold line-clamp-1 leading-tight">
+                                        {updateMessage}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Sound Control Button & Gallery Button */}
+                    {gameState !== 'ADMIN' && !showClosedScreen && (
+                        <div className="fixed top-4 right-4 z-[90] flex flex-col gap-2">
+                            <button 
+                                onClick={() => setIsSoundEnabled(!isSoundEnabled)} 
+                                className="bg-white/80 p-2 rounded-full shadow border border-slate-300 hover:bg-white transition-colors"
+                                title={isSoundEnabled ? "音声をオフにする" : "音声をオンにする"}
+                            >
+                                {isSoundEnabled ? <Volume2 className="w-6 h-6 text-slate-700"/> : <VolumeX className="w-6 h-6 text-slate-400"/>}
+                            </button>
+                            {/* Gallery Button at Top Right */}
+                            {gameState === 'START' && (
+                                <button 
+                                    onClick={() => setGameState('GALLERY')}
+                                    className="bg-white/80 p-2 rounded-full shadow border border-slate-300 hover:bg-white transition-colors flex flex-col items-center justify-center w-10 h-10"
+                                    title="おまけ"
+                                >
+                                    <Gift className="w-5 h-5 text-purple-600" />
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Return to Top Button */}
+                    {gameState !== 'ADMIN' && gameState !== 'START' && !showClosedScreen && (
+                        <button 
+                            onClick={handleGoTop} 
+                            className="fixed top-4 left-4 z-[90] bg-white/80 p-2 px-3 rounded-full shadow border border-slate-300 hover:bg-white transition-colors flex items-center gap-1 font-bold text-xs text-slate-700"
+                        >
+                            <Home className="w-4 h-4"/> TOPへ
+                        </button>
+                    )}
+
+                    {/* Audio Players */}
+                    <audio ref={bgmRef} />
+                    <div id="youtube-player-hidden"></div>
+                    
+                    {/* Background */}
+                    <div className="fixed inset-0 pointer-events-none overflow-hidden select-none z-0">
+                       {bgItems.map(item => (
+                            <div 
+                                key={item.id}
+                                className="absolute animate-float"
+                                style={{
+                                    top: `${item.top}%`,
+                                    left: `${item.left}%`,
+                                    transform: `rotate(${item.rotate}deg) scale(${item.scale})`,
+                                    opacity: item.opacity,
+                                    animationDuration: `${item.animDuration}s`
+                                }}
+                            >
+                                {item.type === 'CHERRY' && <Cherry size={24} className="text-red-900" />}
+                                {item.type === 'BOTTLE' && <BabyBottleIcon className="w-6 h-6 text-slate-800" />}
+                                {item.type === 'MIJINKO' && <MijinkoIcon className="w-8 h-8 text-slate-900" />}
+                            </div>
+                       ))}
+                    </div>
+
+                    {/* Admin Login Modal */}
+                    {showAdminLogin && (
+                        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
+                            <div className="bg-white p-6 rounded-lg max-w-sm w-full">
+                                <h3 className="font-bold text-lg mb-4">管理者ログイン</h3>
+                                <input type="password" placeholder="パスワード" className="w-full border p-2 rounded mb-4" value={inputPassword} onChange={e => setInputPassword(e.target.value)} />
+                                <div className="flex gap-2">
+                                    <button onClick={() => setShowAdminLogin(false)} className="flex-1 border p-2 rounded">キャンセル</button>
+                                    <button onClick={handleAdminLogin} className="flex-1 bg-slate-900 text-white p-2 rounded">ログイン</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Admin Mode UI */}
+                    {gameState === 'ADMIN' ? (
+                        <div className="max-w-4xl mx-auto w-full p-4 pb-20 relative z-20 bg-slate-100 min-h-screen">
+                            <div className="flex justify-between items-center mb-6 sticky top-0 bg-slate-100 py-4 border-b z-30">
+                                <h2 className="text-2xl font-bold flex items-center gap-2"><Settings className="w-6 h-6"/> 管理者モード</h2>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={handleCopyHTML} 
+                                        className={`px-4 py-2 rounded text-sm flex items-center gap-2 shadow transition-all duration-300 transform active:scale-95 ${copySuccess ? 'bg-green-600 hover:bg-green-700 text-white font-bold ring-2 ring-green-300' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
+                                    >
+                                        {copySuccess ? <><Check className="w-4 h-4"/> コピー完了！</> : <><Copy className="w-4 h-4"/> HTMLコピー</>}
+                                    </button>
+                                    <button onClick={() => setGameState('START')} className="bg-white border px-4 py-2 rounded text-sm flex items-center gap-2 hover:bg-slate-50"><X className="w-4 h-4"/> 閉じる</button>
+                                </div>
+                            </div>
+                            <div className="grid gap-6">
+                                
+                                {/* 1. Security & Public Settings */}
+                                <div className="bg-white p-4 rounded shadow border border-slate-300">
+                                    <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-700 border-b pb-2"><Lock className="w-5 h-5"/> セキュリティ・公開設定</h3>
+                                    <div className="space-y-4">
+                                        <div className="border border-blue-200 bg-blue-50 p-3 rounded">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <input 
+                                                    type="checkbox" 
+                                                    id="publicSwitch"
+                                                    checked={tempConfig.isGameActive !== false} 
+                                                    onChange={e => setTempConfig({...tempConfig, isGameActive: e.target.checked})} 
+                                                    className="w-5 h-5 text-blue-600"
+                                                />
+                                                <label htmlFor="publicSwitch" className="text-sm font-bold text-blue-800 cursor-pointer">ゲームを公開する</label>
+                                            </div>
+                                            {!tempConfig.isGameActive && (
+                                                <div className="pl-7">
+                                                    <label className="text-xs font-bold text-slate-500">公開終了時のメッセージ</label>
+                                                    <textarea 
+                                                        className="w-full border p-2 rounded text-sm h-20" 
+                                                        value={tempConfig.gameClosedMsg} 
+                                                        onChange={e => setTempConfig({...tempConfig, gameClosedMsg: e.target.value})}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* ... (Password & Lock settings omitted for brevity, same as before) ... */}
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500">管理者パスワード変更</label>
+                                            <div className="flex gap-2 items-center">
+                                                <div className="relative flex-1">
+                                                    <input 
+                                                        type={showPassword ? "text" : "password"} 
+                                                        placeholder="変更する場合のみ入力"
+                                                        className="w-full border p-2 rounded text-sm bg-yellow-50 border-yellow-300 pr-10" 
+                                                        value={newAdminPassword} 
+                                                        onChange={e => setNewAdminPassword(e.target.value)} 
+                                                    />
+                                                    <button 
+                                                        onClick={() => setShowPassword(!showPassword)}
+                                                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                                    >
+                                                        {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 border-2 border-red-200 bg-red-50 p-3 rounded">
+                                            <input 
+                                                type="checkbox" 
+                                                id="distLock"
+                                                checked={isDistributionMode} 
+                                                onChange={e => setIsDistributionMode(e.target.checked)} 
+                                                className="w-5 h-5 text-red-600"
+                                            />
+                                            <div>
+                                                <label htmlFor="distLock" className="text-sm font-bold text-red-800 cursor-pointer">配布用ロック（管理者機能を無効化）</label>
+                                                <p className="text-[10px] text-slate-600">※これをONにして「HTMLコピー」すると、コピーされたファイルではタイトル連打による管理者ログインができなくなります。他人に渡す場合に推奨。</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="mt-4 pt-4 border-t">
+                                            <label className="text-xs font-bold text-slate-500">クレジット表記（おまけギャラリーに表示）</label>
+                                            <textarea 
+                                                className="w-full border p-2 rounded text-sm h-24" 
+                                                value={tempConfig.creditText || ""} 
+                                                onChange={e => setTempConfig({...tempConfig, creditText: e.target.value})}
+                                                placeholder="例: BGM：魔王魂 様&#13;&#10;SE：効果音ラボ 様"
+                                            />
+                                            <p className="text-[10px] text-slate-400">※未入力の場合は表示されません。</p>
+                                        </div>
+
+                                        <div className="pt-2 border-t mt-2 flex flex-col gap-2">
+                                           <button onClick={handleResetAchievements} className="flex items-center gap-2 text-xs font-bold text-orange-600 hover:text-orange-800 border border-orange-200 bg-orange-50 px-3 py-2 rounded">
+                                             <Trophy className="w-3 h-3"/> 実績・プレイ履歴のみリセット
+                                           </button>
+                                           <button onClick={handleClearLocalStorage} className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-700 border border-slate-200 bg-slate-50 px-3 py-2 rounded">
+                                             <RefreshCw className="w-3 h-3"/> 全データを削除して初期化（設定も消えます）
+                                           </button>
+                                           <p className="text-[10px] text-slate-400 mt-1">※「実績リセット」はテストプレイ後の配布前などに便利です。「全データ削除」は設定も含めて初期化されます。</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Version History Editor (New) */}
+                                <div className="bg-white p-4 rounded shadow border border-slate-300">
+                                    <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-700 border-b pb-2"><FileText className="w-5 h-5"/> 更新履歴・バージョン管理</h3>
+                                    <div className="mb-4">
+                                        <button onClick={handleAddChangelog} className="w-full py-2 bg-slate-700 text-white rounded font-bold shadow hover:bg-slate-800 active:scale-95 transition-transform text-sm">+ 最新のバージョン履歴を追加</button>
+                                    </div>
+                                    <div className="space-y-4 max-h-64 overflow-y-auto">
+                                        {tempChangelog && tempChangelog.map((log, idx) => (
+                                            <div key={idx} className="border p-3 rounded bg-slate-50 relative">
+                                                <button onClick={() => handleDeleteChangelog(idx)} className="absolute top-2 right-2 text-red-500 hover:bg-red-100 p-1 rounded"><Trash2 className="w-4 h-4"/></button>
+                                                <div className="grid grid-cols-3 gap-2 mb-2">
+                                                    <div className="col-span-1">
+                                                        <label className="text-[10px] font-bold text-slate-500">バージョン</label>
+                                                        <input className="w-full border p-1 rounded text-sm" value={log.version} onChange={e => handleUpdateChangelog(idx, 'version', e.target.value)} />
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <label className="text-[10px] font-bold text-slate-500">日付</label>
+                                                        <input className="w-full border p-1 rounded text-sm" value={log.date} onChange={e => handleUpdateChangelog(idx, 'date', e.target.value)} />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-500">更新内容</label>
+                                                    <textarea className="w-full border p-1 rounded text-sm h-16" value={log.content} onChange={e => handleUpdateChangelog(idx, 'content', e.target.value)} />
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {tempChangelog.length === 0 && <p className="text-center text-xs text-slate-400">履歴がありません</p>}
+                                    </div>
+                                </div>
+
+                                {/* ... (Audio & Visual Settings omitted, same as before) ... */}
+                                <div className="bg-white p-4 rounded shadow border border-slate-300">
+                                    <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-700 border-b pb-2"><Music className="w-5 h-5"/> 素材・演出設定</h3>
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                         <div className="col-span-2 bg-red-50 p-3 rounded border border-red-100">
+                                            <label className="text-xs font-bold text-red-800 flex items-center gap-1"><Youtube className="w-4 h-4"/> YouTube BGM ID (ゲーム中)</label>
+                                            <input className="w-full border p-2 rounded text-sm mb-1" placeholder="例: dQw4w9WgXcQ" value={tempConfig.bgmYoutubeId || ""} onChange={e => setTempConfig({...tempConfig, bgmYoutubeId: e.target.value})}/>
+                                            <p className="text-[10px] text-slate-500">※URL全体ではなく、v=の後のIDを入力してください。設定するとMP3より優先されます。</p>
+                                         </div>
+                                         <div className="col-span-2">
+                                            <label className="text-xs font-bold text-slate-500">MP3 BGM URL (ゲーム中)</label>
+                                            <input className="w-full border p-2 rounded text-sm" placeholder="https://..." value={tempConfig.bgmUrl || ""} onChange={e => setTempConfig({...tempConfig, bgmUrl: e.target.value})}/>
+                                         </div>
+                                         <div className="col-span-2 bg-purple-50 p-3 rounded border border-purple-100 mt-2">
+                                            <label className="text-xs font-bold text-purple-800 flex items-center gap-1"><Gift className="w-4 h-4"/> おまけギャラリー用 BGM (YouTube ID)</label>
+                                            <input className="w-full border p-2 rounded text-sm mb-1" placeholder="例: dQw4w9WgXcQ" value={tempConfig.galleryBgmYoutubeId || ""} onChange={e => setTempConfig({...tempConfig, galleryBgmYoutubeId: e.target.value})}/>
+                                            <label className="text-xs font-bold text-slate-500 mt-2 block">おまけギャラリー用 BGM (MP3 URL)</label>
+                                            <input className="w-full border p-2 rounded text-sm" placeholder="https://..." value={tempConfig.galleryBgmUrl || ""} onChange={e => setTempConfig({...tempConfig, galleryBgmUrl: e.target.value})}/>
+                                            <p className="text-[10px] text-slate-500 mt-1">※設定すると、ギャラリー画面を開いている間だけこのBGMが流れます。</p>
+                                         </div>
+
+                                         <div className="col-span-2 border-t pt-2 mt-2">
+                                             <div className="flex justify-between items-center mb-2">
+                                                <h4 className="text-sm font-bold text-slate-600">効果音 (SE) 設定 <span className="text-green-600 text-xs ml-2">※「標準の音」推奨</span></h4>
+                                                <button onClick={handleSetDefaultSounds} className="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Volume1 className="w-3 h-3"/> 標準の音をセット</button>
+                                            </div>
+                                         </div>
+                                         
+                                         {/* 【整理済み】SE設定入力欄（ループ生成） */}
+                                         {[
+                                            { label: "正解SE URL", key: "correctSoundUrl" },
+                                            { label: "不正解SE URL", key: "incorrectSoundUrl" },
+                                            { label: "ボタン音SE URL", key: "btnSoundUrl" },
+                                            { label: "ランク発表SE URL", key: "rankSoundUrl" },
+                                            { label: "実績解除SE URL", key: "unlockSoundUrl" }
+                                         ].map((item) => (
+                                            <div key={item.key}>
+                                                <label className="text-xs font-bold text-slate-500">{item.label}</label>
+                                                <input className="w-full border p-2 rounded text-sm" value={tempConfig[item.key] || ""} onChange={e => validateSEUrl(item.key, e.target.value)}/>
+                                            </div>
+                                         ))}
+
+                                         <div className="col-span-2 border-t pt-4 mt-2">
+                                             <h4 className="text-sm font-bold text-slate-600 mb-2">画像設定</h4>
+                                         </div>
+
+                                         {/* 【整理済み】画像設定入力欄（ループ生成） */}
+                                         {[
+                                            { label: "トップ画像 (URL)", key: "topImageUrl" },
+                                            { label: "ダリのアイコン (解説欄・デフォルト)", key: "daliIconUrl" },
+                                            { label: "正解アニメ画像 (URL)", key: "correctAnimUrl" },
+                                            { label: "不正解アニメ画像 (URL)", key: "incorrectAnimUrl" }
+                                         ].map((item) => (
+                                            <div key={item.key}>
+                                                <label className="text-xs font-bold text-slate-500">{item.label}</label>
+                                                <input className="w-full border p-2 rounded text-sm" value={tempConfig[item.key] || ""} onChange={e => setTempConfig({...tempConfig, [item.key]: e.target.value})}/>
+                                            </div>
+                                         ))}
+                                     </div>
+                                </div>
+
+                                {/* 3. General Config */}
+                                <div className="bg-white p-4 rounded shadow border border-slate-300">
+                                    <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-700 border-b pb-2"><Settings className="w-5 h-5"/> ゲーム設定</h3>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 border p-2 rounded bg-slate-50">
+                                            <input type="checkbox" checked={tempConfig.randomizeQuestions} onChange={e => setTempConfig({...tempConfig, randomizeQuestions: e.target.checked})} />
+                                            <label className="text-sm font-bold">出題順をランダムにする</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Rank Editor (Updated) */}
+                                <div className="bg-white p-4 rounded shadow border border-slate-300">
+                                    <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-700 border-b pb-2"><Settings className="w-5 h-5"/> ランク・評価設定</h3>
+                                    <div className="bg-blue-50 border border-blue-200 p-3 rounded mb-4 text-xs text-blue-800">
+                                        <strong>【判定ルール】</strong><br/>
+                                        リストの<strong>上から順番に</strong>条件（正解数）を判定します。<br/>
+                                        そのため、<strong>「条件が厳しい（正解数が多い）」ランクをリストの上</strong>に配置してください。
+                                    </div>
+                                    
+                                    <div className="mb-4 flex gap-2">
+                                        <button onClick={handleAddRank} className="flex-1 py-2 bg-blue-600 text-white rounded font-bold shadow hover:bg-blue-700 active:scale-95 transition-transform">+ 新しいランクを先頭に追加</button>
+                                        <button onClick={handleSortRanks} className="flex-1 py-2 bg-white text-slate-700 border border-slate-300 rounded font-bold shadow hover:bg-slate-50 active:scale-95 transition-transform flex items-center justify-center gap-2">
+                                            <AlignJustify className="w-4 h-4" /> 点数順に自動整列
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        {tempConfig.ranks && tempConfig.ranks.map((rank, idx) => (
+                                            <div key={idx} className="border p-4 rounded bg-slate-50 relative">
+                                                <div className="absolute top-2 right-2 flex gap-1">
+                                                    <button onClick={() => handleMoveRank(idx, -1)} disabled={idx === 0} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronUp className="w-4 h-4"/></button>
+                                                    <button onClick={() => handleMoveRank(idx, 1)} disabled={idx === tempConfig.ranks.length - 1} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronDown className="w-4 h-4"/></button>
+                                                    <button onClick={() => handleDeleteRank(idx)} className="text-red-500 hover:bg-red-100 p-1 rounded ml-2"><Trash2 className="w-4 h-4"/></button>
+                                                </div>
+                                                <div className="grid gap-3">
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        <div className="col-span-1">
+                                                            <label className="text-xs font-bold">必要正解数 (以上)</label>
+                                                            <input type="number" className="w-full border p-2 rounded" value={rank.threshold} onChange={e => handleUpdateRank(idx, 'threshold', parseInt(e.target.value))}/>
+                                                        </div>
+                                                        <div className="col-span-2">
+                                                            <label className="text-xs font-bold">ランク名</label>
+                                                            <input className="w-full border p-2 rounded" value={rank.title} onChange={e => handleUpdateRank(idx, 'title', e.target.value)}/>
+                                                        </div>
+                                                    </div>
+                                                    <div><label className="text-xs font-bold">メッセージ</label><textarea className="w-full border p-2 rounded h-20" value={rank.msg} onChange={e => handleUpdateRank(idx, 'msg', e.target.value)}/></div>
+                                                    <div><label className="text-xs font-bold">報酬画像URL (ギャラリー解放)</label><input className="w-full border p-2 rounded" value={rank.imageUrl || ""} onChange={e => handleUpdateRank(idx, 'imageUrl', e.target.value)}/></div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                
+                                {/* プレイ回数ボーナス設定 (New) */}
+                                <div className="bg-white p-4 rounded shadow border border-slate-300">
+                                    <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-700 border-b pb-2"><Trophy className="w-5 h-5"/> プレイ回数ボーナス設定</h3>
+                                    <div className="bg-orange-50 border border-orange-200 p-3 rounded mb-4 text-xs text-orange-800">
+                                        <strong>【仕組み】</strong><br/>
+                                        指定した回数遊ぶと解放されるボーナスを設定できます。<br/>
+                                        （例：2回、4回、10回…）
+                                    </div>
+                                    
+                                    <div className="mb-4">
+                                        <button onClick={handleAddPlayReward} className="w-full py-2 bg-orange-500 text-white rounded font-bold shadow hover:bg-orange-600 active:scale-95 transition-transform">+ 新しいボーナスを追加</button>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        {tempConfig.playCountRewards && tempConfig.playCountRewards.map((reward, idx) => (
+                                            <div key={idx} className="border p-4 rounded bg-slate-50 relative">
+                                                <button onClick={() => handleDeletePlayReward(idx)} className="absolute top-2 right-2 text-red-500 hover:bg-red-100 p-1 rounded"><Trash2 className="w-4 h-4"/></button>
+                                                <div className="grid gap-3">
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        <div className="col-span-1">
+                                                            <label className="text-xs font-bold">必要プレイ回数</label>
+                                                            <input type="number" className="w-full border p-2 rounded" value={reward.count} onChange={e => handleUpdatePlayReward(idx, 'count', parseInt(e.target.value))}/>
+                                                        </div>
+                                                        <div className="col-span-2">
+                                                            <label className="text-xs font-bold">実績タイトル</label>
+                                                            <input className="w-full border p-2 rounded" value={reward.title} onChange={e => handleUpdatePlayReward(idx, 'title', e.target.value)}/>
+                                                        </div>
+                                                    </div>
+                                                    <div><label className="text-xs font-bold">メッセージ</label><textarea className="w-full border p-2 rounded h-20" value={reward.msg} onChange={e => handleUpdatePlayReward(idx, 'msg', e.target.value)}/></div>
+                                                    <div><label className="text-xs font-bold">報酬画像URL</label><input className="w-full border p-2 rounded" value={reward.imageUrl || ""} onChange={e => handleUpdatePlayReward(idx, 'imageUrl', e.target.value)}/></div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* 4. Question Editor (same as before) */}
+                                <div className="bg-white p-4 rounded shadow border border-slate-300">
+                                    <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-700 border-b pb-2"><Edit3 className="w-5 h-5"/> 問題編集 ({tempQuestions.length}問)</h3>
+                                    <div className="space-y-6">
+                                        {tempQuestions.map((q, idx) => (
+                                            <div key={idx} className="border p-4 rounded bg-slate-50 relative">
+                                                <button onClick={() => handleDeleteQuestion(idx)} className="absolute top-2 right-2 text-red-500 hover:bg-red-100 p-1 rounded"><Trash2 className="w-4 h-4"/></button>
+                                                <div className="grid gap-3">
+                                                    <div><label className="text-xs font-bold">問題文</label><textarea className="w-full border p-2 rounded" value={q.text} onChange={e => handleUpdateQuestion(idx, 'text', e.target.value)}/></div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div><label className="text-xs font-bold">正解</label><select className="w-full border p-2 rounded" value={q.type} onChange={e => handleUpdateQuestion(idx, 'type', e.target.value)}><option value="MIGI">ミギ</option><option value="BABY">赤ちゃん</option></select></div>
+                                                        <div><label className="text-xs font-bold">状況</label><input className="w-full border p-2 rounded" value={q.situation} onChange={e => handleUpdateQuestion(idx, 'situation', e.target.value)}/></div>
+                                                    </div>
+                                                    <div><label className="text-xs font-bold">画像URL (省略可)</label><input className="w-full border p-2 rounded" value={q.imageUrl || ""} onChange={e => handleUpdateQuestion(idx, 'imageUrl', e.target.value)}/></div>
+                                                    <div><label className="text-xs font-bold">解説</label><textarea className="w-full border p-2 rounded" value={q.explanation} onChange={e => handleUpdateQuestion(idx, 'explanation', e.target.value)}/></div>
+                                                    <div><label className="text-xs font-bold">ダリコメント</label><textarea className="w-full border p-2 rounded" value={q.daliComment} onChange={e => handleUpdateQuestion(idx, 'daliComment', e.target.value)}/></div>
+                                                    {/* Dali Image Individual Setting */}
+                                                    <div><label className="text-xs font-bold text-slate-500">ダリの画像 (この問題専用・省略可)</label><input className="w-full border p-2 rounded" value={q.daliIcon || ""} onChange={e => handleUpdateQuestion(idx, 'daliIcon', e.target.value)}/></div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <button onClick={handleAddQuestion} className="w-full py-2 bg-blue-50 text-blue-600 rounded border border-blue-200 hover:bg-blue-100">+ 新しい問題を追加</button>
+                                    </div>
+                                </div>
+                                <button onClick={handleSaveAdminData} className="sticky bottom-4 w-full bg-green-600 text-white font-bold py-3 rounded shadow-lg hover:bg-green-700 flex justify-center items-center gap-2"><Save className="w-5 h-5"/> 変更を一時保存</button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="max-w-md mx-auto w-full flex-1 flex flex-col px-4 py-8 z-10 relative">
+                            {/* CLOSED SCREEN View */}
+                            {showClosedScreen ? (
+                                <div className="flex-1 flex flex-col justify-center items-center space-y-8 animate-fadeIn relative z-20 p-8">
+                                    <div 
+                                        className="bg-white p-10 rounded-lg shadow-xl border-4 border-slate-300 w-full text-center relative"
+                                        onClick={() => {
+                                            if (!config.lockAdmin) {
+                                                const newCount = titleClickCount + 1;
+                                                setTitleClickCount(newCount);
+                                                if (newCount >= 10) {
+                                                    setShowAdminLogin(true);
+                                                    setTitleClickCount(0);
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <div className="flex justify-center mb-6">
+                                            <div className="bg-slate-100 p-4 rounded-full">
+                                                <Globe className="w-12 h-12 text-slate-400" />
+                                            </div>
+                                        </div>
+                                        <h2 className="text-xl font-bold font-serif mb-4 text-slate-700">公開終了</h2>
+                                        <p className="text-slate-600 whitespace-pre-wrap leading-relaxed">{config.gameClosedMsg}</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Common Header / Title (Only on START or GALLERY) */}
+                                    {(gameState === 'START' || gameState === 'GALLERY') && (
+                                        <div 
+                                            className="text-center mb-8 select-none flex items-center justify-center gap-3 relative z-30" 
+                                            style={{ cursor: gameState === 'ADMIN' ? 'default' : 'pointer' }}
+                                        >
+                                            <div className="absolute inset-0 bg-[#fdfbf7]/90 blur-md scale-110 -z-10 rounded-full"></div>
+                                            <div className="active:scale-90 transition-transform cursor-default p-1 animate-sway">
+                                               <Cherry className="w-8 h-8 text-red-600 drop-shadow-md" />
+                                            </div>
+                                            <div onClick={handleTitleClick} className="relative">
+                                                <h1 className="text-3xl font-serif font-black tracking-widest text-slate-900 border-b-4 border-red-600 pb-2 inline-block transform active:scale-95 transition-transform">ミギか赤ちゃんか</h1>
+                                                <p className="text-xs font-serif tracking-widest text-slate-500 mt-1 uppercase">Hypnotic Regression or Instinct?</p>
+                                            </div>
+                                            <div className="active:scale-90 transition-transform cursor-default p-1 animate-sway">
+                                               <BabyBottleIcon className="w-8 h-8 text-slate-700 drop-shadow-md" />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {gameState === 'START' && (
+                                        <div className="flex-1 flex flex-col justify-center items-center space-y-8 animate-fadeIn relative z-20">
+                                            <div className="bg-white p-8 rounded-xl shadow-2xl w-full text-center max-w-sm relative">
+                                                {/* 添付画像のTOP画面デザインを再現 */}
+                                                <div className="mb-8 font-serif">
+                                                    <h2 className="text-xl font-bold text-slate-800 mb-4 tracking-wider">ミギはかわいい。</h2>
+                                                    <p className="text-xs text-slate-500 mb-8 tracking-wider">そして時に、無垢な赤ちゃんになる。</p>
+                                                    <p className="text-xs text-slate-600 mb-2">しかし、それは計算された</p>
+                                                    <div className="mb-6">
+                                                        <span className="font-bold border-b border-slate-800 text-lg text-slate-800 px-1 inline-block pb-1">「高度な演技」</span>
+                                                        <span className="text-xs text-slate-500 ml-2">なのか？</span>
+                                                    </div>
+                                                    <p className="text-xs text-slate-600 mb-2">それとも、抗うことのできない</p>
+                                                    <div className="mb-8">
+                                                        <span className="font-bold text-red-500 border-b-2 border-red-500 text-lg px-1 inline-block pb-1">「本能的退行（退行催眠）」</span>
+                                                        <span className="text-xs text-slate-500 ml-2">なのか？</span>
+                                                    </div>
+                                                </div>
+                                                <p className="text-xs text-slate-700 font-bold mb-8 tracking-wide">ダリとなり、ミギの精神状態を判定せよ。</p>
+                                                <p className="text-[10px] text-red-400 mb-4">※ゲーム開始と同時に音声が再生されます（音量注意）</p>
+                                                <button onClick={handleStart} className="w-full bg-slate-800 text-white font-bold py-3 rounded-full hover:bg-slate-700 shadow-lg active:scale-95 transition-transform tracking-widest text-sm mb-4">
+                                                    判定を開始する
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {gameState === 'GALLERY' && (
+                                        <div className="flex-1 flex flex-col items-center animate-fadeIn relative z-20 w-full max-w-md pb-10">
+                                            <div className="bg-white p-6 rounded-lg shadow-xl w-full">
+                                                <div className="flex items-center justify-between mb-6 border-b pb-4">
+                                                    <h2 className="text-xl font-bold font-serif text-slate-800 flex items-center gap-2">
+                                                        <Gift className="w-6 h-6 text-purple-600" />
+                                                        おまけギャラリー
+                                                    </h2>
+                                                    <button onClick={handleGoTop} className="text-sm bg-slate-100 px-3 py-1 rounded hover:bg-slate-200">戻る</button>
+                                                </div>
+                                                
+                                                <h3 className="text-sm font-bold text-slate-500 mb-3 border-l-4 border-slate-500 pl-2">🏆 判定ランク報酬</h3>
+                                                <div className="grid grid-cols-2 gap-4 mb-8">
+                                                    {config.ranks && config.ranks.map((rank, idx) => {
+                                                        const isUnlocked = unlockedRanks.includes(rank.title);
+                                                        return (
+                                                            <div 
+                                                                key={idx} 
+                                                                className={`border rounded-lg p-2 flex flex-col items-center justify-center text-center transition-all ${isUnlocked ? 'bg-white cursor-pointer hover:shadow-md border-slate-200' : 'bg-slate-100 border-slate-100'}`}
+                                                                onClick={() => {
+                                                                    if (isUnlocked) {
+                                                                        if (rank.imageUrl) {
+                                                                            // 画像がある場合は拡大表示モード (IMAGE)
+                                                                            showModal('IMAGE', rank.msg, null, rank.title, rank.imageUrl);
+                                                                        } else {
+                                                                            // 画像がない場合は従来通り (ALERT)
+                                                                            showModal('ALERT', `${rank.title}\n\n${rank.msg}`);
+                                                                        }
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <div className="aspect-square w-full mb-2 bg-slate-50 rounded flex items-center justify-center overflow-hidden relative">
+                                                                    {isUnlocked ? (
+                                                                        rank.imageUrl ? (
+                                                                            <img src={rank.imageUrl} className="w-full h-full object-cover" />
+                                                                        ) : (
+                                                                            <div className="text-slate-300 text-4xl font-serif">no img</div>
+                                                                        )
+                                                                    ) : (
+                                                                        <div className="text-slate-300 text-4xl font-bold">?</div>
+                                                                    )}
+                                                                    {isUnlocked && <div className="absolute bottom-0 right-0 bg-green-500 text-white text-[10px] px-1 font-bold">GET</div>}
+                                                                </div>
+                                                                <div className="text-xs font-bold text-slate-700 line-clamp-1">
+                                                                    {isUnlocked ? rank.title : "???"}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+
+                                                <h3 className="text-sm font-bold text-orange-500 mb-3 border-l-4 border-orange-500 pl-2">🎁 プレイ回数ボーナス</h3>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    {config.playCountRewards && config.playCountRewards.map((reward, idx) => {
+                                                        const isUnlocked = unlockedPlayCounts.includes(reward.count);
+                                                        return (
+                                                            <div 
+                                                                key={idx} 
+                                                                className={`border rounded-lg p-2 flex flex-col items-center justify-center text-center transition-all ${isUnlocked ? 'bg-white cursor-pointer hover:shadow-md border-orange-200' : 'bg-slate-100 border-slate-100'}`}
+                                                                onClick={() => {
+                                                                    if (isUnlocked) {
+                                                                        if (reward.imageUrl) {
+                                                                            // 画像がある場合は拡大表示モード (IMAGE)
+                                                                            showModal('IMAGE', reward.msg, null, reward.title, reward.imageUrl);
+                                                                        } else {
+                                                                            // 画像がない場合は従来通り (ALERT)
+                                                                            showModal('ALERT', `${reward.title}\n\n${reward.msg}`);
+                                                                        }
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <div className="aspect-square w-full mb-2 bg-slate-50 rounded flex items-center justify-center overflow-hidden relative">
+                                                                    {isUnlocked ? (
+                                                                        reward.imageUrl ? (
+                                                                            <img src={reward.imageUrl} className="w-full h-full object-cover" />
+                                                                        ) : (
+                                                                            <div className="flex flex-col items-center">
+                                                                                <Trophy className="text-orange-300 w-10 h-10 mb-1"/>
+                                                                            </div>
+                                                                        )
+                                                                    ) : (
+                                                                        <div className="flex flex-col items-center text-slate-400">
+                                                                             <span className="text-xs font-bold mb-1">あと</span>
+                                                                             <span className="text-xl font-bold">{Math.max(0, reward.count - totalPlayCount)}</span>
+                                                                             <span className="text-[10px]">回</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {isUnlocked && <div className="absolute bottom-0 right-0 bg-orange-500 text-white text-[10px] px-1 font-bold">GET</div>}
+                                                                </div>
+                                                                <div className="text-xs font-bold text-slate-700 line-clamp-1">
+                                                                    {isUnlocked ? reward.title : `${reward.count}回プレイ`}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+
+                                                <p className="text-center text-[10px] text-slate-400 mt-6 mb-4">
+                                                    遊んだ回数に応じて、新しい記録が解放されます。<br/>
+                                                    獲得済みの項目をタップすると詳細が見られます。
+                                                </p>
+
+                                                {config.creditText && (
+                                                    <div className="mt-8 pt-6 border-t border-slate-200 w-full text-center">
+                                                        <p className="text-[10px] text-slate-400 font-bold mb-2">CREDIT</p>
+                                                        <p className="text-xs text-slate-500 whitespace-pre-wrap leading-relaxed">{config.creditText}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {gameState === 'PLAYING' && currentQ && (
+                                        <div className="flex-1 flex flex-col animate-slideUp relative z-20">
+                                            <div className="w-full bg-slate-200 h-3 rounded-full mb-2 relative overflow-hidden"><div className="bg-red-500 h-full transition-all duration-500 ease-out" style={{width: `${((currentQuestionIndex) / playQuestions.length) * 100}%`}}></div></div>
+                                            {/* 【変更点】問題数カウント表示 */}
+                                            <div className="text-center text-slate-500 font-bold mb-4 text-xs tracking-wider">QUESTION {currentQuestionIndex + 1} / {playQuestions.length}</div>
+                                            
+                                            <div className="flex-1 flex flex-col justify-center">
+                                                <div className="bg-white p-6 rounded-lg shadow-2xl border-2 border-slate-800 relative mb-6 min-h-[220px] flex flex-col justify-center items-center">
+                                                    <div className="absolute top-3 right-3 text-xs bg-slate-50 border px-3 py-1 rounded-full text-slate-500">状況: {currentQ.situation}</div>
+                                                    {currentQ.imageUrl ? (
+                                                        <img src={currentQ.imageUrl} className="max-h-48 object-contain mb-4 rounded" />
+                                                    ) : (
+                                                        // 【変更点】Mask -> Cherry に変更（双子なので）
+                                                        <div className="mb-4">{config.migiIconUrl ? <img src={config.migiIconUrl} className="w-16 h-16 object-contain rounded-full border p-1" /> : <Cherry size={64} className="text-slate-700"/>}</div>
+                                                    )}
+                                                    {/* 【変更点】文字サイズ縮小・左揃え */}
+                                                    <h3 className={`w-full text-base md:text-xl font-serif font-bold text-left leading-loose whitespace-pre-wrap ${shake ? 'text-red-600 animate-shake' : 'text-slate-800'}`}>
+                                                        {currentQ.text}
+                                                    </h3>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    {/* 【変更点】ボタンをぷっくり立体的に変更 & Mask -> Cherry */}
+                                                    <button onClick={() => handleAnswer('MIGI')} className="h-32 bg-white border-2 border-b-[6px] border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-[2rem] flex flex-col items-center justify-center group active:border-b-2 active:translate-y-[4px] transition-all shadow-sm">
+                                                        <Cherry size={40} className="text-slate-700 mb-2 group-hover:scale-110 transition-transform"/>
+                                                        <span className="font-bold font-serif">演技（ミギ）</span>
+                                                    </button>
+                                                    {/* 【変更点】ボタンをぷっくり立体的に変更 */}
+                                                    <button onClick={() => handleAnswer('BABY')} className="h-32 bg-red-50 border-2 border-b-[6px] border-red-200 hover:bg-red-100 rounded-[2rem] flex flex-col items-center justify-center group active:border-b-2 active:translate-y-[4px] transition-all shadow-sm">
+                                                        <Baby className="w-10 h-10 text-red-500 mb-2 group-hover:rotate-12 transition-transform relative z-10"/>
+                                                        <span className="font-bold font-serif">本能（赤ちゃん）</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {gameState === 'RESULT' && currentQ && (
+                                        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+                                            {!lastAnswerCorrect && config.incorrectAnimUrl && <div className="absolute bottom-0 right-0 z-[60] w-1/2 max-w-xs animate-slideInRight pointer-events-none"><img src={config.incorrectAnimUrl} className="w-full object-contain drop-shadow-2xl"/></div>}
+                                            <div className="bg-white w-full max-w-md p-6 rounded-lg border-4 border-slate-900 relative shadow-2xl">
+                                                {lastAnswerCorrect && config.correctAnimUrl && <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 z-[70] animate-bounce-in"><div className="w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden bg-white"><img src={config.correctAnimUrl} className="w-full h-full object-cover"/></div></div>}
+                                                <div className="text-center mb-6 mt-6">
+                                                    <h2 className={`text-2xl font-bold font-serif ${lastAnswerCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                                                        {lastAnswerCorrect ? (config.correctTitle || '正解') : (config.incorrectTitle || '不正解')}
+                                                    </h2>
+                                                </div>
+                                                <div className="bg-slate-50 p-4 rounded border mb-4">
+                                                    <p className="font-bold text-sm mb-2 text-slate-400">ANALYSIS</p>
+                                                    <p className="text-slate-800">{currentQ.explanation}</p>
+                                                    <div className="mt-4 pt-4 flex items-start gap-4"> {/* マージン調整 */}
+                                                        <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-slate-900 flex items-center justify-center text-white shrink-0 overflow-hidden shadow-md"> {/* サイズアップ */}
+                                                            {(currentQ.daliIcon || config.daliIconUrl) ? <img src={currentQ.daliIcon || config.daliIconUrl} className="w-full h-full object-cover"/> : 'D'}
+                                                        </div>
+                                                        <div className="relative bg-white border border-slate-200 rounded-2xl rounded-tl-none p-3 text-sm shadow-sm whitespace-pre-wrap text-slate-700 flex-1">
+                                                            {currentQ.daliComment}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <button onClick={nextQuestion} className="w-full bg-slate-800 text-white font-bold py-3 rounded-full hover:bg-slate-700">次へ進む</button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {gameState === 'END' && currentRank && (
+                                        <div className="flex-1 flex flex-col justify-center items-center space-y-6 animate-fadeIn relative z-20">
+                                            <div className="bg-white p-8 rounded-lg shadow-xl border-4 border-slate-900 w-full text-center">
+                                                <h2 className="text-2xl font-bold font-serif mb-4">最終判定結果</h2>
+                                                <div className="text-5xl md:text-6xl font-black text-slate-900 font-serif mb-6">{score} <span className="text-2xl text-slate-400">/ {playQuestions.length}</span></div>
+                                                
+                                                <div className="bg-slate-50 p-4 rounded border mb-6 text-left">
+                                                    <div className="text-xs font-bold text-slate-400 mb-2">RANK</div>
+                                                    <div className="text-lg md:text-xl font-bold text-slate-800 mb-3 border-b pb-2 border-slate-200">
+                                                        {currentRank.title}
+                                                    </div>
+                                                    <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">
+                                                        {currentRank.msg}
+                                                    </p>
+                                                    {currentRank.imageUrl && (
+                                                        <div className="mt-4 pt-4 border-t">
+                                                            <img src={currentRank.imageUrl} className="w-full rounded shadow-sm" alt="Rank Reward" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                
+                                                <button onClick={handleStart} className="w-full bg-slate-800 text-white font-bold py-3 rounded-full hover:bg-slate-700">もう一度挑戦する</button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ファンメイド作品の注釈 (Footer) */}
+                    {gameState !== 'ADMIN' && (
+                        <div className="w-full text-center py-4 text-[10px] text-slate-400/70 pointer-events-none z-0 mt-auto pb-16 md:pb-4 relative">
+                            ※本作は非公式のファンメイド作品であり、文章・画像等の無断転載を固く禁じます
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
